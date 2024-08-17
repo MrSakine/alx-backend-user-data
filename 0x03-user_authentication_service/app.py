@@ -55,7 +55,7 @@ def login():
     return response
 
 
-@app.route("/sessions", methods=["DELETE"], strict_slashes=False)
+@app.route("/sessions", methods=["DELETE"])
 def logout():
     """Log out a user by destroying their session"""
     session_id = request.cookies.get("session_id")
@@ -75,6 +75,21 @@ def logout():
             403,
             description="Invalid session or user not found"
         )
+
+
+@app.route("/profile", methods=["GET"])
+def profile():
+    """Fetches the user's profile information"""
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        abort(403, description="Session ID is missing or invalid")
+    user = AUTH.get_user_from_session_id(session_id)
+    if user:
+        return jsonify(
+            {"email": user.email, "message": "logged in"}
+        )
+    else:
+        abort(403, description="Invalid session or user not found")
 
 
 if __name__ == "__main__":
