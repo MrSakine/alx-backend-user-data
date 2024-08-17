@@ -66,3 +66,26 @@ class DB:
             raise InvalidRequestError("Invalid query arguments provided.")
 
         return user
+
+    def update_user(self, user_id: int, **kwargs) -> None:
+        """Update a user's attributes.
+
+        Args:
+            user_id (int): The ID of the user to update.
+            **kwargs: Arbitrary keyword arguments corresponding
+            to User attributes.
+
+        Raises:
+            ValueError: If any argument does not correspond
+            to a User attribute.
+        """
+        user = self.find_user_by(id=user_id)
+        for key, value in kwargs.items():
+            if hasattr(user, key):
+                setattr(user, key, value)
+            else:
+                raise ValueError(
+                    "'{}' is not a valid attribute of the User class.".format(
+                        key)
+                )
+        self._session.commit()
