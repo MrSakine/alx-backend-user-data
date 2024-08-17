@@ -1,81 +1,119 @@
-#!/usr/bin/env python3
-"""
-Main file
-"""
-from user import User
-from db import DB
-from sqlalchemy.exc import InvalidRequestError
-from sqlalchemy.orm.exc import NoResultFound
-from auth import _hash_password, Auth
+import requests
 
-print(User.__tablename__)
-
-for column in User.__table__.columns:
-    print("{}: {}".format(column, column.type))
-
-my_db = DB()
-user_1 = my_db.add_user("test@test.com", "SuperHashedPwd")
-print(user_1.id)
-
-user_2 = my_db.add_user("test1@test.com", "SuperHashedPwd1")
-print(user_2.id)
-
-find_user = my_db.find_user_by(email="test@test.com")
-print(find_user.id)
-
-try:
-    find_user = my_db.find_user_by(email="test2@test.com")
-    print(find_user.id)
-except NoResultFound:
-    print("Not found")
-
-try:
-    find_user = my_db.find_user_by(no_email="test@test.com")
-    print(find_user.id)
-except InvalidRequestError:
-    print("Invalid")
-
-email = 'test@test.com'
-hashed_password = "hashedPwd"
-
-user = my_db.add_user(email, hashed_password)
-print(user.id)
-
-try:
-    my_db.update_user(user.id, hashed_password='NewPwd')
-    print("Password updated")
-except ValueError:
-    print("Error")
+BASE_URL = "http://localhost:5000"
+USER_URL = f"{BASE_URL}/users"
+SESSION_URL = f"{BASE_URL}/sessions"
+PROFILE_URL = f"{BASE_URL}/profile"
+RESET_PASSWORD_URL = f"{BASE_URL}/reset_password"
 
 
-print(_hash_password("Hello Holberton"))
+def register_user(email: str, password: str) -> None:
+    """Test user registration"""
+    response = requests.post(
+        USER_URL,
+        data={"email": email, "password": password}
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "email": email,
+        "message": "user created"
+    }
 
-email = 'me@me.com'
-password = 'mySecuredPwd'
-auth = Auth()
 
-try:
-    user = auth.register_user(email, password)
-    print("successfully created a new user!")
-except ValueError as err:
-    print("could not create a new user: {}".format(err))
+def log_in_wrong_password(email: str, password: str) -> None:
+    """Test login with incorrect password"""
+    response = requests.post(
+        SESSION_URL,
+        data={"email": email, "password": password}
+    )
+    assert response.status_code == 401
 
-try:
-    user = auth.register_user(email, password)
-    print("successfully created a new user!")
-except ValueError as err:
-    print("could not create a new user: {}".format(err))
 
-email = 'bob@bob.com'
-password = 'MyPwdOfBob'
+def log_in(email: str, password: str) -> str:
+    """Test login and return session ID"""
+    response = requests.post(
+        SESSION_URL,
+        data={"email": email, "password": password}
+    )
+    assert response.status_code == 200
+    response_json = response.json()
+    assert "email" in response_json and "message" in response_json
+    return response.cookies.get("session_id")
 
-auth.register_user(email, password)
 
-print(auth.valid_login(email, password))
+def profile_unlogged() -> None:
+    """Test profile access without login"""
+    response = requests.get(PROFILE_URL)
+    assert response.status_code == 403
 
-print(auth.valid_login(email, "WrongPwd"))
 
-print(auth.valid_login("unknown@email", password))
+def profile_logged(session_id: str) -> None:
+    """Test profile access with valid session ID"""
+    response = requests.get(
+        PROFILE_URL,
+        cookies={"session_id": session_id}
+    )
+    assert response.status_code == 200
+    assert response.json()["email"] == "guillaume@holberton.io"
 
-print(auth.create_session(email))
-print(auth.create_session("unknown@email.com"))
+
+def log_out(session_id: str) -> None:
+    """Test logout"""
+    response = requests.delete(
+        SESSION_URL,
+        cookies={"session_id": session_id},
+        allow_redirects=False
+    )
+    assert response.status_code == 302
+
+
+def reset_password_token(email: str) -> str:
+    """Test reset password token generation"""
+    response = requests.post(
+        RESET_PASSWORD_URL,
+        data={"email": email}
+    )
+    assert response.status_code == 200
+    response_json = response.json()
+    assert (
+        "email" in response_json and
+        "reset_token" in response_json
+    )
+    return response_json["reset_token"]
+
+
+def update_password(
+    email: str,
+    reset_token: str,
+    new_password: str
+) -> None:
+    """Test password update"""
+    response = requests.put(
+        RESET_PASSWORD_URL,
+        data={
+            "email": email,
+            "reset_token": reset_token,
+            "new_password": new_password
+        }
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "email": email,
+        "message": "Password updated"
+    }
+
+
+EMAIL = "guillaume@holberton.io"
+PASSWD = "b4l0u"
+NEW_PASSWD = "t4rt1fl3tt3"
+
+if __name__ == "__main__":
+    register_user(EMAIL, PASSWD)
+    log_in_wrong_password(EMAIL, NEW_PASSWD)
+    profile_unlogged()
+    session_id = log_in(EMAIL, PASSWD)
+    profile_logged(session_id)
+    log_out(session_id)
+    reset_token = reset_password_token(EMAIL)
+    update_password(EMAIL, reset_token, NEW_PASSWD)
+    log_in(EMAIL, NEW_PASSWD)
