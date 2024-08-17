@@ -92,5 +92,18 @@ def profile():
         abort(403, description="Invalid session or user not found")
 
 
+@app.route("/reset_password", methods=["POST"])
+def get_reset_password_token():
+    """Generates and returns a reset password token"""
+    email = request.form.get("email")
+    try:
+        reset_token = AUTH.get_reset_password_token(email=email)
+        return jsonify(
+            {"email": email, "reset_token": reset_token}
+        )
+    except ValueError:
+        abort(403, description="Email not registered")
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
